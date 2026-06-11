@@ -1,0 +1,5 @@
+# 改行コードを LF に正規化（リポジトリ内）
+* text=auto eol=lf
+
+# バイナリ
+*.png binary

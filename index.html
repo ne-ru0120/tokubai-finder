@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#e8462e" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="特売ファインダー" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="stylesheet" href="styles.css" />
+  <title>特売ファインダー</title>
+</head>
+<body>
+  <header class="app-header">
+    <h1>🛒 特売ファインダー</h1>
+    <p class="subtitle">現在地のまわりのおトクを探す</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" id="tab-search" role="tab">🔍 さがす</button>
+    <button class="tab" id="tab-admin" role="tab">✏️ 登録</button>
+  </nav>
+
+  <!-- ============ さがす ============ -->
+  <main class="app-main view" id="view-search">
+    <section class="controls" aria-label="検索条件">
+      <label class="control-label" for="distance-input">
+        探す範囲
+        <span class="distance-value"><span id="distance-readout">1000</span> m</span>
+      </label>
+
+      <input type="range" id="distance-range" min="100" max="10000" step="100" value="1000" aria-label="距離スライダー" />
+
+      <div class="number-row">
+        <button type="button" class="step-btn" id="step-down" aria-label="距離を減らす">−</button>
+        <input type="number" id="distance-input" min="100" max="10000" step="100" value="1000" inputmode="numeric" />
+        <span class="unit">m</span>
+        <button type="button" class="step-btn" id="step-up" aria-label="距離を増やす">＋</button>
+      </div>
+
+      <button type="button" class="search-btn" id="search-btn">📍 現在地から探す</button>
+    </section>
+
+    <section class="status" id="status" aria-live="polite"></section>
+    <div id="map" class="map" aria-label="地図" hidden></div>
+    <section class="results" id="results" aria-label="検索結果"></section>
+    <nav class="pager" id="pager" aria-label="ページ送り"></nav>
+  </main>
+
+  <!-- ============ 登録 ============ -->
+  <main class="app-main view" id="view-admin" hidden>
+    <section class="controls">
+      <h2 class="section-title">店舗を追加</h2>
+      <div class="form-grid">
+        <input type="text" id="f-name" placeholder="店舗名（例：西友 町田店）" />
+        <select id="f-category">
+          <option value="スーパー">スーパー</option>
+          <option value="コンビニ">コンビニ</option>
+          <option value="青果店">青果店</option>
+          <option value="ドラッグストア">ドラッグストア</option>
+          <option value="薬局">薬局</option>
+          <option value="その他">その他</option>
+        </select>
+        <div class="latlon-row">
+          <input type="number" id="f-lat" placeholder="緯度" step="0.000001" inputmode="decimal" />
+          <input type="number" id="f-lon" placeholder="経度" step="0.000001" inputmode="decimal" />
+        </div>
+        <input type="url" id="f-url" placeholder="公式チラシURL（任意）" />
+        <div class="btn-row">
+          <button type="button" class="ghost-btn" id="f-here">📍 現在地をセット</button>
+          <button type="button" class="ghost-btn" id="f-osm">🗺️ 近くから探す</button>
+        </div>
+        <button type="button" class="search-btn" id="f-add-store">店舗を追加</button>
+      </div>
+      <div id="osm-picker" class="osm-picker" hidden></div>
+    </section>
+
+    <section class="status" id="admin-status" aria-live="polite"></section>
+
+    <section class="controls">
+      <h2 class="section-title">特売を登録する店舗を検索</h2>
+      <input type="search" id="admin-search" class="admin-search-input"
+             placeholder="店名で検索（例：西友、マツモトキヨシ、業務スーパー）" />
+      <div id="admin-search-results" class="admin-list" style="margin-top:12px;"></div>
+    </section>
+
+    <h2 class="section-title" style="margin:18px 4px 6px;">特売を登録済み／自分で追加した店舗</h2>
+    <section class="admin-list" id="admin-list"></section>
+  </main>
+
+  <footer class="app-footer">
+    店舗位置: OpenStreetMap ／ 特売: 公式チラシを見て手入力（端末内に保存）
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

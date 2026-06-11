@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Claude Code / プレビュー用ローカル設定
+.claude/
+
+# 一時ファイル・ログ
+*.log
+_*.txt
+tmp/
