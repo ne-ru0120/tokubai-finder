@@ -116,7 +116,7 @@ function saveSales(s) { localStorage.setItem(LS_SALES, JSON.stringify(s)); }
 /* ---------- 全国店舗ディレクトリ（読み取り専用・data/stores.json） ----------
  * サイズが大きいため、セッション中は1回だけ取得しブラウザにHTTPキャッシュさせる。
  * データ更新時は DIRECTORY_VERSION を上げてキャッシュを破棄する。 */
-const DIRECTORY_VERSION = 3;
+const DIRECTORY_VERSION = 4;
 let DIRECTORY = [];
 let directoryLoaded = false;   // 成功時のみ true（失敗時は次回リトライ）
 let _dirPromise = null;        // 同時呼び出しの重複フェッチを防ぐ
