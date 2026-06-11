@@ -6,6 +6,10 @@
 
 ## 2026-06-12
 
+### ドキュメント
+- **改定履歴（CHANGELOG.md）を追加**。
+- **README に公開サイト・リポジトリの URL を記載**（公開済みのため機密性の問題なし）。iPhone でのホーム画面追加手順も追記。
+
 ### 公開・運用
 - **GitHub 連携**: リポジトリ `ne-ru0120/tokubai-finder`（Public）を作成し初回 push。
 - **HTTPS 公開**: GitHub Pages を有効化し、<https://ne-ru0120.github.io/tokubai-finder/> で公開（HTTPS 強制）。
