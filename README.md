@@ -3,6 +3,13 @@
 現在地から **100〜10000m**（入力で変更可）の範囲にある店舗を探し、特売商品を表示する PWA です。
 iPhone SE3（375×667pt）向けに最適化しています。
 
+## リンク
+
+- 🌐 **公開サイト（HTTPS）**: <https://ne-ru0120.github.io/tokubai-finder/>
+- 📦 **リポジトリ**: <https://github.com/ne-ru0120/tokubai-finder>
+
+> iPhone の Safari で公開サイトを開き、位置情報を許可 → 共有メニュー →「ホーム画面に追加」でアプリとして使えます。
+
 ## 構成
 
 | 項目 | 内容 |
