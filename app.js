@@ -190,27 +190,33 @@ function getCurrentPosition() {
   });
 }
 
-/* 高精度測位：watchPosition で数秒間ベストな測位を集め、十分な精度になり次第確定。
- *  GPSは初回が粗く数秒で精度が上がるため、単発取得より正確になる。 */
-function getAccuratePosition({ desiredAccuracy = 35, maxWait = 9000, onProgress } = {}) {
+/* 高精度測位：getCurrentPosition（iOS standalone で確実）を主、watchPosition を精度向上の
+ *  補助として併用する。どちらかが測位を返せば採用し、権限拒否は即座に正しいメッセージで返す。 */
+function getAccuratePosition({ desiredAccuracy = 35, maxWait = 12000, onProgress } = {}) {
   return new Promise((resolve, reject) => {
     if (!('geolocation' in navigator)) { reject(new Error('この端末では位置情報を利用できません。')); return; }
-    let best = null, watchId = null, timer = null;
-    const finish = (err) => {
-      if (watchId != null) navigator.geolocation.clearWatch(watchId);
+    let best = null, watchId = null, timer = null, lastErr = null, done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      if (watchId != null) { try { navigator.geolocation.clearWatch(watchId); } catch (e) {} }
       if (timer) clearTimeout(timer);
-      if (best) resolve(best); else reject(err || new Error('現在地を取得できませんでした。'));
+      if (best) resolve(best);
+      else reject(lastErr || new Error('現在地を取得できませんでした。電波の良い場所で再度お試しください。'));
+    };
+    const onPos = (pos) => {
+      if (!best || pos.coords.accuracy < best.accuracy) best = pos.coords;
+      if (onProgress) onProgress(best.accuracy);
+      if (best.accuracy <= desiredAccuracy) finish(); // 十分な精度に到達
+    };
+    const onErr = (err) => {
+      lastErr = new Error(geoErrorMessage(err));
+      if (err && err.code === 1) finish(); // 権限拒否は確定 → 即終了
+      // それ以外（取得不可/タイムアウト）はもう一方の測位かタイマーに任せる
     };
     timer = setTimeout(() => finish(), maxWait);
-    watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        if (!best || pos.coords.accuracy < best.accuracy) best = pos.coords;
-        if (onProgress) onProgress(best.accuracy);
-        if (best.accuracy <= desiredAccuracy) finish(); // 十分な精度に到達
-      },
-      (err) => { if (!best) finish(new Error(geoErrorMessage(err))); },
-      { enableHighAccuracy: true, timeout: maxWait, maximumAge: 0 }
-    );
+    const opts = { enableHighAccuracy: true, timeout: maxWait, maximumAge: 0 };
+    try { navigator.geolocation.getCurrentPosition(onPos, onErr, opts); } catch (e) {}
+    try { watchId = navigator.geolocation.watchPosition(onPos, onErr, opts); } catch (e) {}
   });
 }
 
