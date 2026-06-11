@@ -16,7 +16,8 @@
   - これにより実機（iPhone SE3）でも位置情報が利用可能に（位置情報は https 必須）。
 
 ### 不具合修正
-- **ホーム画面アプリ（standalone）で現在地が取得できない問題に対応**: 測位を `getCurrentPosition`（iOS standalone で確実）＋ `watchPosition`（精度向上の補助）の併用に変更。`watchPosition` が無反応でも取得でき、権限拒否時は待たずに正しいメッセージを表示するようにした。
+- **ホーム画面アプリの現在地取得不可（iOS standalone の不具合）を回避**: iOS の standalone Web アプリでは位置情報が拒否される個体があるため、ホーム画面アイコンを **Safari ブラウザ起動**に変更（`apple-mobile-web-app-capable=no`、manifest `display:browser`）。ブラウザでは確実に取得できるため、これで安定動作する。standalone に戻す場合はメタと manifest を元に戻す。
+- **ホーム画面アプリ（standalone）の測位を堅牢化**: 測位を `getCurrentPosition`（iOS standalone で確実）＋ `watchPosition`（精度向上の補助）の併用に変更。`watchPosition` が無反応でも取得でき、権限拒否時は待たずに正しいメッセージを表示するようにした。
 - **店舗ディレクトリが読み込めない不具合を修正**: 初回取得に失敗すると「空のまま読込済み」と記録され、以降再取得しなかった。成功時のみ確定し、失敗時は次回の検索で自動リトライするように変更。
 - **Service Worker のキャッシュ問題を根絶**: 旧来のキャッシュ優先 SW が古いファイルを配信し続けていた。SW を自己消滅（kill-switch）型に変更し、アプリ側でも新規登録を停止。古い端末も次回アクセス時に自動でクリーン化される。
 

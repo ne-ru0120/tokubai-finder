@@ -5,7 +5,7 @@
   "lang": "ja",
   "start_url": "./index.html",
   "scope": "./",
-  "display": "standalone",
+  "display": "browser",
   "orientation": "portrait",
   "background_color": "#f5f3ef",
   "theme_color": "#e8462e",
