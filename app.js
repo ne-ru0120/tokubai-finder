@@ -1,16 +1,11 @@
 'use strict';
 
 /* =========================================================
- * 特売ファインダー（店舗手入力DB版）
+ * 特売ファインダー
  *
- * ・店舗マスタと特売を端末内（localStorage）に保存する。
- * ・「さがす」: 現在地から指定距離内の登録店舗を距離順に表示し、
- *   手入力した実際の特売を見せる。
- * ・「登録」: 公式チラシ等を見て店舗・特売を手入力する。OSM(Overpass)
- *   から近隣店舗を取り込んで素早く店舗を追加することもできる。
- *
- * ※ 特売データは「自分で公式チラシを見て入力した実データ」。日本の
- *   食品スーパーには特売を取得できる公開APIが無いための現実的な構成。
+ * 現在地から指定距離内のスーパー＆ドラッグストアを距離順に表示し、
+ * 各店舗の「チラシを見る」で くふう トクバイ等のチラシページへ遷移する。
+ * 店舗ディレクトリは OpenStreetMap 由来（data/stores.json）。
  * ======================================================= */
 
 const MIN_DIST = 100, MAX_DIST = 10000, STEP = 100;
@@ -312,21 +307,7 @@ async function openFlyer(store) {
 function openFlyerById(id) { openFlyer(getStore(id)); }
 
 /* ============================================================
- *  タブ切り替え
- * ========================================================== */
-function showView(which) {
-  const isSearch = which === 'search';
-  $('view-search').hidden = !isSearch;
-  $('view-admin').hidden = isSearch;
-  $('tab-search').classList.toggle('active', isSearch);
-  $('tab-admin').classList.toggle('active', !isSearch);
-  if (!isSearch) renderAdmin();
-}
-$('tab-search').addEventListener('click', () => showView('search'));
-$('tab-admin').addEventListener('click', () => showView('admin'));
-
-/* ============================================================
- *  さがす：距離コントロール
+ *  距離コントロール（スライダー＋数値入力）
  * ========================================================== */
 function clampDistance(v) {
   let n = Math.round(Number(v) / STEP) * STEP;
@@ -342,8 +323,6 @@ function setDistance(v, source) {
 }
 $('distance-range').addEventListener('input', () => setDistance($('distance-range').value, 'range'));
 $('distance-input').addEventListener('change', () => setDistance($('distance-input').value, 'input'));
-$('step-up').addEventListener('click', () => setDistance(getDistance() + STEP));
-$('step-down').addEventListener('click', () => setDistance(getDistance() - STEP));
 
 function setStatus(html, isError = false) {
   $('status').innerHTML = html;
@@ -418,7 +397,7 @@ function renderMap(coords, radius, results) {
 function renderResults(results) {
   if (!results.length) {
     $('results').innerHTML =
-      '<div class="empty">この範囲に登録店舗がありません。<br>距離を広げるか、「登録」タブで店舗を追加してください。</div>';
+      '<div class="empty">この範囲に店舗が見つかりませんでした。<br>距離を広げてお試しください。</div>';
     return;
   }
   $('results').innerHTML = results.map((r) => {
@@ -431,9 +410,7 @@ function renderResults(results) {
         </span>
       </li>`).join('');
     const link = `<a class="chirashi-link" href="#" data-flyer="${escapeHtml(r.store.id)}">チラシを見る ↗</a>`;
-    const body = r.sales.length
-      ? `<ul class="sale-list">${saleRows}</ul>`
-      : `<div class="no-sale">特売は未登録 — <a href="#" data-add="${escapeHtml(r.store.id)}">登録する</a></div>`;
+    const body = r.sales.length ? `<ul class="sale-list">${saleRows}</ul>` : '';
     return `
       <article class="store-card">
         <div class="store-head">
@@ -447,10 +424,6 @@ function renderResults(results) {
       </article>`;
   }).join('');
 
-  // 「登録する」リンク → 登録タブでその店の特売エディタを開く
-  $('results').querySelectorAll('a[data-add]').forEach((a) => {
-    a.addEventListener('click', (e) => { e.preventDefault(); focusAdminStore(a.dataset.add); });
-  });
   // 「チラシを見る」→ その店舗のチラシを開く
   $('results').querySelectorAll('a[data-flyer]').forEach((a) => {
     a.addEventListener('click', (e) => { e.preventDefault(); openFlyerById(a.dataset.flyer); });
@@ -547,240 +520,13 @@ async function runSearch() {
 }
 $('search-btn').addEventListener('click', runSearch);
 
-/* ============================================================
- *  登録：店舗マスタ＆特売の手入力
- * ========================================================== */
-function setAdminStatus(msg, isError = false) {
-  const el = $('admin-status');
-  el.textContent = msg;
-  el.classList.toggle('error', isError);
-  if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
-}
-
-/* 店舗を追加 */
-$('f-add-store').addEventListener('click', () => {
-  const name = $('f-name').value.trim();
-  const lat = parseFloat($('f-lat').value);
-  const lon = parseFloat($('f-lon').value);
-  if (!name) return setAdminStatus('店舗名を入力してください。', true);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return setAdminStatus('緯度・経度を入力してください。', true);
-
-  const stores = loadStores();
-  stores.push({
-    id: newId('store'), name, category: $('f-category').value,
-    lat, lon, url: $('f-url').value.trim(),
-  });
-  saveStores(stores);
-  ['f-name', 'f-lat', 'f-lon', 'f-url'].forEach((id) => ($(id).value = ''));
-  $('osm-picker').hidden = true;
-  setAdminStatus('店舗を追加しました。');
-  renderAdmin();
-});
-
-/* 現在地を緯度経度にセット（高精度測位） */
-$('f-here').addEventListener('click', async () => {
-  setAdminStatus('現在地を測位中…');
-  try {
-    const c = await getAccuratePosition({
-      onProgress: (acc) => setAdminStatus(`測位中…（精度 ±${Math.round(acc)}m）`),
-    });
-    $('f-lat').value = c.latitude.toFixed(6);
-    $('f-lon').value = c.longitude.toFixed(6);
-    setAdminStatus(`現在地をセットしました（精度 ±${Math.round(c.accuracy)}m）。`);
-  } catch (e) { setAdminStatus(e.message, true); }
-});
-
-/* OSM(Overpass)から近隣店舗を探して取り込む */
-async function fetchOsmStores(lat, lon, radius) {
-  const shops = 'supermarket|convenience|greengrocer|bakery|butcher|chemist|drugstore';
-  const query = `[out:json][timeout:25];(` +
-    `node["shop"~"^(${shops})$"](around:${radius},${lat},${lon});` +
-    `way["shop"~"^(${shops})$"](around:${radius},${lat},${lon});` +
-    `node["amenity"="pharmacy"](around:${radius},${lat},${lon});` +
-    `way["amenity"="pharmacy"](around:${radius},${lat},${lon});` +
-    `);out center tags;`;
-  const endpoints = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
-  for (const url of endpoints) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
-    try {
-      const res = await fetch(url, { method: 'POST', signal: ctrl.signal,
-        body: 'data=' + encodeURIComponent(query),
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const json = await res.json();
-      const labels = { supermarket: 'スーパー', convenience: 'コンビニ', greengrocer: '青果店',
-        bakery: 'ベーカリー', butcher: '精肉店', chemist: 'ドラッグストア', drugstore: 'ドラッグストア' };
-      const out = [];
-      for (const el of json.elements || []) {
-        const t = el.tags || {}, n = t['name:ja'] || t.name;
-        const la = el.lat ?? el.center?.lat, lo = el.lon ?? el.center?.lon;
-        if (!n || la == null) continue;
-        const category = labels[t.shop] || (t.amenity === 'pharmacy' ? '薬局' : 'その他');
-        out.push({ name: n, category, lat: la, lon: lo,
-          distance: Math.round(haversine(lat, lon, la, lo)) });
-      }
-      out.sort((a, b) => a.distance - b.distance);
-      return out;
-    } catch (e) { /* 次の endpoint へ */ } finally { clearTimeout(timer); }
-  }
-  throw new Error('近隣店舗の取得に失敗しました。時間をおいて再度お試しください。');
-}
-
-$('f-osm').addEventListener('click', async () => {
-  const picker = $('osm-picker');
-  picker.hidden = false;
-  picker.innerHTML = '<div class="muted"><span class="spinner"></span>現在地まわりの店舗を取得中…</div>';
-  try {
-    const c = await getCurrentPosition();
-    const list = (await fetchOsmStores(c.latitude, c.longitude, 1000)).slice(0, 30);
-    if (!list.length) { picker.innerHTML = '<div class="muted">近くに店舗が見つかりませんでした。</div>'; return; }
-    picker.innerHTML = '<div class="muted">タップして店舗フォームに反映：</div>' +
-      list.map((s, i) => `
-        <button type="button" class="osm-item" data-i="${i}">
-          <span>${escapeHtml(s.name)}<small>${escapeHtml(s.category)}</small></span>
-          <span class="osm-dist">${distText(s.distance)}</span>
-        </button>`).join('');
-    picker.querySelectorAll('.osm-item').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const s = list[+btn.dataset.i];
-        $('f-name').value = s.name;
-        $('f-category').value = ['スーパー', 'コンビニ', '青果店', 'ドラッグストア', '薬局', 'その他'].includes(s.category) ? s.category : 'その他';
-        $('f-lat').value = s.lat.toFixed(6);
-        $('f-lon').value = s.lon.toFixed(6);
-        picker.hidden = true;
-        setAdminStatus('フォームに反映しました。内容を確認して「店舗を追加」を押してください。');
-        $('f-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
-  } catch (e) { picker.innerHTML = `<div class="muted error">${escapeHtml(e.message)}</div>`; }
-});
-
-/* 特売エディタ（共有カード） */
-function storeCardHTML(store, sales) {
-  const items = sales[store.id] || [];
-  const rows = items.map((it) => `
-    <li class="admin-sale">
-      <span>${escapeHtml(it.name)} <b>${fmtYen(it.price)}</b>${it.was ? ` <s>${fmtYen(it.was)}</s>` : ''}</span>
-      <button type="button" class="mini-del" data-del-sale="${escapeHtml(store.id)}|${escapeHtml(it.id)}">削除</button>
-    </li>`).join('') || '<li class="muted">特売は未登録</li>';
-  const link = `<a href="#" onclick="openFlyerById('${escapeHtml(store.id)}');return false;">チラシ ↗</a>`;
-  const isUser = !String(store.id).startsWith('osm_'); // 全国ディレクトリの店舗は削除不可
-  const delBtn = isUser
-    ? `<button type="button" class="mini-del" data-del-store="${escapeHtml(store.id)}">店舗削除</button>` : '';
-  return `
-    <article class="admin-card" data-card="${escapeHtml(store.id)}">
-      <div class="admin-head">
-        <div><b>${escapeHtml(store.name)}</b><div class="muted">${escapeHtml(store.category)} ${link}</div></div>
-        ${delBtn}
-      </div>
-      <ul class="admin-sales">${rows}</ul>
-      <div class="add-sale">
-        <input type="text" placeholder="商品名" data-sname />
-        <input type="number" placeholder="特売価格" inputmode="numeric" data-sprice />
-        <input type="number" placeholder="通常価格(任意)" inputmode="numeric" data-swas />
-        <button type="button" class="add-sale-btn" data-add-sale="${escapeHtml(store.id)}">特売を追加</button>
-      </div>
-    </article>`;
-}
-
-/* 「特売を登録済み／自分で追加した店舗」を描画（全件は出さない） */
-function renderAdmin() {
-  const sales = loadSales();
-  const map = new Map();
-  for (const id of Object.keys(sales)) {            // 特売がある店舗（ディレクトリ含む）
-    if (sales[id] && sales[id].length) { const s = getStore(id); if (s) map.set(id, s); }
-  }
-  for (const s of loadStores()) map.set(s.id, s);    // 自分で追加した店舗
-  const list = [...map.values()];
-  $('admin-list').innerHTML = list.length
-    ? list.map((s) => storeCardHTML(s, sales)).join('')
-    : '<div class="empty">まだ特売の登録がありません。<br>下の検索、または「さがす」の結果から店舗を選んで登録できます。</div>';
-}
-
-/* 店舗名で検索して特売エディタを開く */
-function renderAdminSearch(q) {
-  const box = $('admin-search-results');
-  q = (q || '').trim();
-  if (!q) { box.innerHTML = ''; return; }
-  const sales = loadSales();
-  const matches = getAllStores().filter((s) => s.name.includes(q)).slice(0, 25);
-  box.innerHTML = matches.length
-    ? matches.map((s) => storeCardHTML(s, sales)).join('')
-    : '<div class="muted">該当する店舗がありません。「さがす」で現在地周辺を検索するか、上のフォームで追加してください。</div>';
-}
-$('admin-search').addEventListener('input', (e) => renderAdminSearch(e.target.value));
-
-/* 検索結果の「登録する」から呼ばれる：その店のエディタを開く */
-function focusAdminStore(id) {
-  showView('admin');
-  const store = getStore(id);
-  if (!store) return;
-  $('admin-search').value = store.name;
-  renderAdminSearch(store.name);
-  setTimeout(() => {
-    const card = $('admin-search-results').querySelector(`[data-card="${CSS.escape(id)}"]`);
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 60);
-}
-
-/* 1枚のカードだけ作り直す */
-function refreshAdminCard(sid) {
-  const sales = loadSales();
-  const store = getStore(sid);
-  for (const container of [$('admin-list'), $('admin-search-results')]) {
-    const card = container.querySelector(`[data-card="${CSS.escape(sid)}"]`);
-    if (card && store) card.outerHTML = storeCardHTML(store, sales);
-  }
-  if (!$('admin-list').querySelector(`[data-card="${CSS.escape(sid)}"]`)) renderAdmin();
-}
-
-/* 特売の追加・削除・店舗削除（コンテナにイベント委譲） */
-function wireAdminDelegation(container) {
-  container.addEventListener('click', (e) => {
-    const addBtn = e.target.closest('[data-add-sale]');
-    const delSale = e.target.closest('[data-del-sale]');
-    const delStore = e.target.closest('[data-del-store]');
-    if (addBtn) {
-      const sid = addBtn.dataset.addSale;
-      const card = addBtn.closest('.admin-card');
-      const name = card.querySelector('[data-sname]').value.trim();
-      const price = parseInt(card.querySelector('[data-sprice]').value, 10);
-      const wasRaw = card.querySelector('[data-swas]').value;
-      const was = wasRaw ? parseInt(wasRaw, 10) : null;
-      if (!name) return setAdminStatus('商品名を入力してください。', true);
-      if (!Number.isFinite(price)) return setAdminStatus('特売価格を入力してください。', true);
-      const sales = loadSales();
-      (sales[sid] = sales[sid] || []).push({ id: newId('sale'), name, price, was });
-      saveSales(sales);
-      refreshAdminCard(sid);
-      setAdminStatus('特売を追加しました。');
-    } else if (delSale) {
-      const [sid, itemId] = delSale.dataset.delSale.split('|');
-      const sales = loadSales();
-      sales[sid] = (sales[sid] || []).filter((it) => it.id !== itemId);
-      saveSales(sales);
-      refreshAdminCard(sid);
-    } else if (delStore) {
-      const sid = delStore.dataset.delStore;
-      if (!confirm('この店舗と特売を削除しますか？')) return;
-      saveStores(loadStores().filter((s) => s.id !== sid));
-      const sales = loadSales(); delete sales[sid]; saveSales(sales);
-      renderAdmin();
-      renderAdminSearch($('admin-search').value);
-    }
-  });
-}
-wireAdminDelegation($('admin-list'));
-wireAdminDelegation($('admin-search-results'));
-
 /* ---------- 初期化 ---------- */
 setDistance(1000);
 loadStores(); // スーパーのシード投入
 ensureSeedBatch('drugstores-machida-v1', DRUGSTORE_SEED); // ドラッグストアを一度だけ追加
 ensureSeedBatch('drugstores-machida-v2', DRUGSTORE_SEED_V2); // クリエイト・ウエルシアを一度だけ追加
 ensureSeedBatch('stores-machida-v3', STORE_SEED_V3); // トモズ・デポー・業務スーパー・ツルハを一度だけ追加
-loadDirectory(); // 全国ディレクトリを先読み（登録タブの検索用）
+loadDirectory(); // 全国ディレクトリを先読み
 
 /* Service Worker は使わない（キャッシュ起因の更新不具合を避けるため）。
  * 既存の登録が残っていれば解除し、キャッシュも掃除する。 */
