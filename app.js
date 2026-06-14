@@ -14,100 +14,6 @@ let searchState = null; // { coords, radius, results, total, page }
 const LS_STORES = 'tf_stores_v1';
 const LS_SALES = 'tf_sales_v1';
 
-/* ---------- 初期シード（町田の主要4店舗） ----------
- * 座標は OpenStreetMap 由来の概算。登録画面で編集できる。
- */
-function seedStores() {
-  return [
-    { id: 'machida-tokyu', name: '東急ストア 町田店', category: 'スーパー',
-      lat: 35.5419, lon: 139.4474, url: 'https://www.tokyu-store.co.jp/shop/detail.html?pdid=148' },
-    { id: 'machida-seiyu', name: '西友 町田店', category: 'スーパー',
-      lat: 35.5435, lon: 139.4441, url: 'https://www.seiyu.co.jp/flyer/chirashi/' },
-    { id: 'machida-sanwa', name: 'スーパー三和 上鶴間店', category: 'スーパー',
-      lat: 35.5372, lon: 139.4452, url: 'https://www.heartful-sanwa.co.jp/' },
-    { id: 'machida-odakyuox', name: 'Odakyu OX 町田店', category: 'スーパー',
-      lat: 35.531573, lon: 139.437267, url: 'https://www.odakyu-ox.net/' },
-  ];
-}
-
-/* 追加シード：町田の主要ドラッグストア（座標はOSM由来、公式チラシリンク付き）。
- * 特売はチェーンの公式チラシを見て登録画面で手入力する。 */
-const DRUGSTORE_SEED = [
-  { id: 'machida-matsukiyo', name: 'マツモトキヨシ 町田店', category: 'ドラッグストア',
-    lat: 35.543125, lon: 139.4466, url: 'https://www.matsukiyococokara-online.com/store/' },
-  { id: 'machida-sundrug', name: 'サンドラッグ 町田店', category: 'ドラッグストア',
-    lat: 35.542443, lon: 139.447497, url: 'https://www.sundrug.co.jp/' },
-  { id: 'machida-sugi', name: 'スギ薬局 町田店', category: 'ドラッグストア',
-    lat: 35.541732, lon: 139.447644, url: 'https://www.sugi-net.jp/' },
-  { id: 'machida-cocokara', name: 'ココカラファイン 町田店', category: 'ドラッグストア',
-    lat: 35.540747, lon: 139.449472, url: 'https://www.cocokarafine.co.jp/' },
-];
-
-/* 追加シードv2：クリエイトSD・ウエルシア（町田駅に最も近い店舗）。
- * 座標は国土地理院ジオコーディング由来。駅から少し離れるので検索距離に注意。 */
-const DRUGSTORE_SEED_V2 = [
-  { id: 'machida-create', name: 'クリエイトSD 町田金森店', category: 'ドラッグストア',
-    lat: 35.533516, lon: 139.459534, url: 'https://www.create-sd.co.jp/' },
-  { id: 'machida-welcia', name: 'ウエルシア 町田境川店', category: 'ドラッグストア',
-    lat: 35.560169, lon: 139.42215, url: 'https://www.welcia.co.jp/' },
-];
-
-/* 追加シードv3：トモズ・デポー(生活クラブ)・業務スーパー・ツルハ（町田の最寄り店）。
- * 座標は国土地理院ジオコーディング由来。 */
-const STORE_SEED_V3 = [
-  { id: 'machida-tomods', name: 'トモズ ミーナ町田店', category: 'ドラッグストア',
-    lat: 35.542442, lon: 139.44606, url: 'https://www.tomods.jp/' },
-  { id: 'machida-depot', name: 'デポー町田（生活クラブ）', category: 'スーパー',
-    lat: 35.535652, lon: 139.470474, url: 'https://tokyo.seikatsuclub.coop/service/depot/machida.html' },
-  { id: 'machida-gyomu', name: '業務スーパー 町田木曽店', category: 'スーパー',
-    lat: 35.559376, lon: 139.431, url: 'https://www.gyomusuper.jp/shop/detail.php?sh_id=1680' },
-  { id: 'machida-tsuruha', name: 'ツルハドラッグ 町田木曽西店', category: 'ドラッグストア',
-    lat: 35.568478, lon: 139.422516, url: 'https://www.tsuruha.co.jp/' },
-];
-
-/* 初期サンプル特売（東急ストアに数件。挙動確認用、登録画面で編集・削除可） */
-function seedSales() {
-  return {
-    'machida-tokyu': [
-      { id: 's1', name: '卵 10個', price: 158, was: 258 },
-      { id: 's2', name: '牛乳 1L', price: 178, was: 230 },
-      { id: 's3', name: '鶏むね肉 100g', price: 58, was: 88 },
-    ],
-  };
-}
-
-/* ---------- 永続化 ---------- */
-function loadStores() {
-  const raw = localStorage.getItem(LS_STORES);
-  if (raw) { try { return JSON.parse(raw); } catch (e) {} }
-  const s = seedStores();
-  localStorage.setItem(LS_STORES, JSON.stringify(s));
-  if (!localStorage.getItem(LS_SALES)) {
-    localStorage.setItem(LS_SALES, JSON.stringify(seedSales()));
-  }
-  return s;
-}
-function saveStores(s) { localStorage.setItem(LS_STORES, JSON.stringify(s)); }
-
-/* 追加シードを一度だけマージする（ユーザーの編集・削除は壊さない） */
-function ensureSeedBatch(batchId, seedStores) {
-  const applied = JSON.parse(localStorage.getItem('tf_seed_applied') || '[]');
-  if (applied.includes(batchId)) return;
-  const stores = loadStores();
-  const ids = new Set(stores.map((s) => s.id));
-  let changed = false;
-  for (const s of seedStores) if (!ids.has(s.id)) { stores.push(s); changed = true; }
-  if (changed) saveStores(stores);
-  applied.push(batchId);
-  localStorage.setItem('tf_seed_applied', JSON.stringify(applied));
-}
-function loadSales() {
-  const raw = localStorage.getItem(LS_SALES);
-  if (raw) { try { return JSON.parse(raw); } catch (e) {} }
-  return {};
-}
-function saveSales(s) { localStorage.setItem(LS_SALES, JSON.stringify(s)); }
-
 /* ---------- 全国店舗ディレクトリ（読み取り専用・data/stores.json） ----------
  * サイズが大きいため、セッション中は1回だけ取得しブラウザにHTTPキャッシュさせる。
  * データ更新時は DIRECTORY_VERSION を上げてキャッシュを破棄する。 */
@@ -132,21 +38,9 @@ async function loadDirectory() {
   return _dirPromise;
 }
 
-/* ユーザー追加店舗とディレクトリを統合（近接重複はユーザー店舗を優先） */
-function cellKey(s) { return `${s.category}|${s.lat.toFixed(3)},${s.lon.toFixed(3)}`; }
-function getAllStores() {
-  const user = loadStores();
-  const taken = new Set(user.map(cellKey));
-  const dir = DIRECTORY.filter((s) => !taken.has(cellKey(s)));
-  return user.concat(dir);
-}
-function getStore(id) {
-  return loadStores().find((s) => s.id === id) || DIRECTORY.find((s) => s.id === id) || null;
-}
-
-function newId(prefix) {
-  return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
+/* 全店舗 = ディレクトリ（data/stores.json） */
+function getAllStores() { return DIRECTORY; }
+function getStore(id) { return DIRECTORY.find((s) => s.id === id) || null; }
 
 /* ---------- 共通ユーティリティ ---------- */
 function $(id) { return document.getElementById(id); }
@@ -373,17 +267,12 @@ function renderMap(coords, radius, results) {
     .addTo(storeLayer);
 
   for (const r of results) {
-    const top = r.sales[0];
-    const saleHtml = top
-      ? `<div class="popup-sale">${escapeHtml(top.name)} <span class="price">${fmtYen(top.price)}</span></div>`
-      : '<div class="popup-sale">特売は未登録</div>';
     const linkHtml = `<div><a href="#" onclick="openFlyerById('${escapeHtml(r.store.id)}');return false;">チラシを見る ↗</a></div>`;
     L.circleMarker([r.store.lat, r.store.lon], { radius: 7, color: '#fff', weight: 2, fillColor: '#e8462e', fillOpacity: 1 })
       .addTo(storeLayer)
       .bindPopup(
         `<div class="popup-name">${escapeHtml(r.store.name)}</div>` +
         `<div class="popup-cat">${escapeHtml(r.store.category)}</div>` +
-        saleHtml +
         `<div class="popup-dist">現在地から ${distText(r.distance)}</div>` + linkHtml
       );
   }
@@ -401,16 +290,7 @@ function renderResults(results) {
     return;
   }
   $('results').innerHTML = results.map((r) => {
-    const saleRows = r.sales.map((it) => `
-      <li class="sale-item">
-        <span class="name">${escapeHtml(it.name)}<span class="sale-badge">特売</span></span>
-        <span class="price-wrap">
-          <span class="price">${fmtYen(it.price)}</span>
-          ${it.was ? `<span class="was">${fmtYen(it.was)}</span>` : ''}
-        </span>
-      </li>`).join('');
     const link = `<a class="chirashi-link" href="#" data-flyer="${escapeHtml(r.store.id)}">チラシを見る ↗</a>`;
-    const body = r.sales.length ? `<ul class="sale-list">${saleRows}</ul>` : '';
     return `
       <article class="store-card">
         <div class="store-head">
@@ -420,7 +300,6 @@ function renderResults(results) {
           </div>
           <div class="store-dist">${distText(r.distance)}<small>現在地から</small></div>
         </div>
-        ${body}
       </article>`;
   }).join('');
 
@@ -477,12 +356,10 @@ function renderPager(pages, current) {
 
 /* 指定地点・距離から結果を計算（再検索でも共用） */
 function computeResults(coords, radius) {
-  const sales = loadSales();
   return getAllStores()
     .map((store) => ({
       store,
       distance: Math.round(haversine(coords.latitude, coords.longitude, store.lat, store.lon)),
-      sales: sales[store.id] || [],
     }))
     .filter((r) => r.distance <= radius)
     .sort((a, b) => a.distance - b.distance);
@@ -522,10 +399,12 @@ $('search-btn').addEventListener('click', runSearch);
 
 /* ---------- 初期化 ---------- */
 setDistance(1000);
-loadStores(); // スーパーのシード投入
-ensureSeedBatch('drugstores-machida-v1', DRUGSTORE_SEED); // ドラッグストアを一度だけ追加
-ensureSeedBatch('drugstores-machida-v2', DRUGSTORE_SEED_V2); // クリエイト・ウエルシアを一度だけ追加
-ensureSeedBatch('stores-machida-v3', STORE_SEED_V3); // トモズ・デポー・業務スーパー・ツルハを一度だけ追加
+// 旧バージョンのシード店舗・サンプル特売（手入力DB）が残っていれば掃除
+try {
+  localStorage.removeItem(LS_STORES);
+  localStorage.removeItem(LS_SALES);
+  localStorage.removeItem('tf_seed_applied');
+} catch (e) {}
 loadDirectory(); // 全国ディレクトリを先読み
 
 /* Service Worker は使わない（キャッシュ起因の更新不具合を避けるため）。
