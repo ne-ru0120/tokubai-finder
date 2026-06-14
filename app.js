@@ -416,3 +416,6 @@ if ('serviceWorker' in navigator) {
     caches.keys().then((ks) => ks.forEach((k) => caches.delete(k))).catch(() => {});
   }
 }
+
+/* 初回ロード時に自動で1回検索（現在地取得）。以降の再検索はボタンで手動。 */
+runSearch();
